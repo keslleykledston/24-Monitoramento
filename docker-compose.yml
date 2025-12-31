@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: monitoring-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - monitoring-net
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: monitoring-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - monitoring-net
+
+  # Backend API
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: monitoring-api
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      API_SECRET_KEY: ${API_SECRET_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      PROBE_SP_TOKEN: ${PROBE_SP_TOKEN}
+      PROBE_MAO_TOKEN: ${PROBE_MAO_TOKEN}
+      PROBE_FRA_TOKEN: ${PROBE_FRA_TOKEN}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - monitoring-net
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
+    container_name: monitoring-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    networks:
+      - monitoring-net
+    restart: unless-stopped
+
+  # Probe São Paulo
+  probe-sp:
+    build:
+      context: ./probe
+      dockerfile: Dockerfile
+    container_name: monitoring-probe-sp
+    environment:
+      API_URL: http://api:8000
+      PROBE_ID: 1
+      LOCATION_ID: 1
+      PROBE_TOKEN: ${PROBE_SP_TOKEN}
+      CHECK_INTERVAL: 1.0
+    depends_on:
+      - api
+    networks:
+      - monitoring-net
+    restart: unless-stopped
+
+  # Probe Manaus
+  probe-mao:
+    build:
+      context: ./probe
+      dockerfile: Dockerfile
+    container_name: monitoring-probe-mao
+    environment:
+      API_URL: http://api:8000
+      PROBE_ID: 2
+      LOCATION_ID: 2
+      PROBE_TOKEN: ${PROBE_MAO_TOKEN}
+      CHECK_INTERVAL: 1.0
+    depends_on:
+      - api
+    networks:
+      - monitoring-net
+    restart: unless-stopped
+
+  # Probe Frankfurt
+  probe-fra:
+    build:
+      context: ./probe
+      dockerfile: Dockerfile
+    container_name: monitoring-probe-fra
+    environment:
+      API_URL: http://api:8000
+      PROBE_ID: 3
+      LOCATION_ID: 3
+      PROBE_TOKEN: ${PROBE_FRA_TOKEN}
+      CHECK_INTERVAL: 1.0
+    depends_on:
+      - api
+    networks:
+      - monitoring-net
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+
+networks:
+  monitoring-net:
+    driver: bridge
