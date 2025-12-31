@@ -3,7 +3,7 @@ import { useMonitoring } from '../contexts/MonitoringContext';
 import { buildSmoothPath, smoothValues, downsampleValues } from '../utils/chart';
 
 export default function Dashboard() {
-  const { targetList, targetMetrics, targetStatus, probeList } = useMonitoring();
+  const { httpTargets, targetMetrics, targetStatus, probeList } = useMonitoring();
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -67,17 +67,17 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h2>Monitoramento em Tempo Real</h2>
+        <h2>Monitoramento HTTP/HTTPS em Tempo Real</h2>
         <p className="timestamp">{currentTime.toLocaleString('pt-BR')}</p>
       </div>
 
-      {targetList.length === 0 ? (
+      {httpTargets.length === 0 ? (
         <div className="empty-state">
-          <p>Nenhum alvo configurado. Vá em Settings para adicionar alvos de monitoramento.</p>
+          <p>Nenhum alvo HTTP/HTTPS configurado. Vá em Settings para adicionar alvos de monitoramento HTTP/HTTPS.</p>
         </div>
       ) : (
         <div className="targets-grid">
-          {targetList.map((target) => {
+          {httpTargets.map((target) => {
             const metrics = targetMetrics[target.name];
             const status = targetStatus[`${target.id}-${probeList[0]?.id}`];
             const isUp = status?.up || false;
@@ -108,16 +108,16 @@ export default function Dashboard() {
                       <>
                         <div className="metric">
                           <span className="metric-label">Atual</span>
-                          <span className="metric-value">{currentRtt ? `${currentRtt.toFixed(0)}ms` : '-'}</span>
+                          <span className="metric-value">{currentRtt ? `${currentRtt.toFixed(2)}ms` : '-'}</span>
                         </div>
                         <div className="metric">
                           <span className="metric-label">Média</span>
-                          <span className="metric-value">{metrics.avg ? `${metrics.avg.toFixed(0)}ms` : '-'}</span>
+                          <span className="metric-value">{metrics.avg ? `${metrics.avg.toFixed(2)}ms` : '-'}</span>
                         </div>
                         <div className="metric">
                           <span className="metric-label">Min/Max</span>
                           <span className="metric-value">
-                            {metrics.min !== Infinity ? `${metrics.min.toFixed(0)}/${metrics.max.toFixed(0)}ms` : '-'}
+                            {metrics.min !== Infinity ? `${metrics.min.toFixed(2)}/${metrics.max.toFixed(2)}ms` : '-'}
                           </span>
                         </div>
                       </>

@@ -1,78 +1,80 @@
 import { useState, useEffect } from 'react';
+import { useMonitoring } from '../contexts/MonitoringContext';
+import { targets as targetsAPI } from '../services/api';
 import UptimeBar, { UptimeSegment } from '../components/history/UptimeBar';
 import '../styles/history.css';
 
-// Target definitions (same as LatencyMonitor)
-const TARGETS = [
-  { id: 1, name: 'Globo', url: 'https://globo.com', baseLatency: 43 },
-  { id: 2, name: 'UOL', url: 'https://uol.com.br', baseLatency: 46 },
-  { id: 3, name: 'Mercado Livre', url: 'https://mercadolivre.com.br', baseLatency: 49 },
-  { id: 4, name: 'Gov.br', url: 'https://gov.br', baseLatency: 52 },
-  { id: 5, name: 'Reclame Aqui', url: 'https://reclameaqui.com.br', baseLatency: 55 },
-  { id: 6, name: 'Google', url: 'https://google.com', baseLatency: 58 },
-  { id: 7, name: 'YouTube', url: 'https://youtube.com', baseLatency: 61 },
-  { id: 8, name: 'Facebook', url: 'https://facebook.com', baseLatency: 64 },
-  { id: 9, name: 'Instagram', url: 'https://instagram.com', baseLatency: 67 },
-  { id: 10, name: 'Wikipedia', url: 'https://wikipedia.org', baseLatency: 70 },
-];
-
 type TimeRange = 7 | 30 | 90;
 
+interface HistoricalData {
+  targetId: number;
+  targetName: string;
+  segments: UptimeSegment[];
+}
+
 export default function History() {
+  const { targetList } = useMonitoring();
   const [timeRange, setTimeRange] = useState<TimeRange>(7);
-  const [historyData, setHistoryData] = useState<Map<number, UptimeSegment[]>>(new Map());
+  const [historyData, setHistoryData] = useState<HistoricalData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Generate mock history data
+  // Load real historical data from API
   useEffect(() => {
-    const data = new Map<number, UptimeSegment[]>();
+    if (targetList.length === 0) return;
 
-    TARGETS.forEach((target) => {
-      const segments: UptimeSegment[] = [];
-      const now = new Date();
-      const startTime = new Date(now.getTime() - timeRange * 24 * 60 * 60 * 1000);
+    const loadHistoricalData = async () => {
+      setIsLoading(true);
+      try {
+        const dataPromises = targetList.map(async (target) => {
+          try {
+            const response = await targetsAPI.getHistory(target.id, timeRange);
+            const aggregates = response?.aggregates || [];
 
-      let currentTime = startTime;
+            // Convert aggregates to segments
+            const segments: UptimeSegment[] = aggregates.map((agg: any) => {
+              // Determine status based on data
+              let status: 'up' | 'down' | 'degraded' = 'up';
 
-      while (currentTime < now) {
-        // Generate random segment
-        const random = Math.random();
-        let status: 'up' | 'down' | 'degraded';
-        let duration: number;
-        let latency: number;
+              if (agg.avg_rtt_ms === null || agg.packet_loss > 50) {
+                status = 'down';
+              } else if (agg.packet_loss > 0 || agg.avg_rtt_ms > 150) {
+                status = 'degraded';
+              }
 
-        if (random < 0.02) {
-          // 2% chance of downtime
-          status = 'down';
-          duration = Math.floor(Math.random() * 1800) + 300; // 5-35 minutes
-          latency = 0;
-        } else if (random < 0.12) {
-          // 10% chance of degraded performance
-          status = 'degraded';
-          duration = Math.floor(Math.random() * 3600) + 600; // 10-70 minutes
-          // Degraded = latency > 50% above baseline
-          latency = target.baseLatency * (1.5 + Math.random() * 0.8); // 150-230% of baseline
-        } else {
-          // 88% operational
-          status = 'up';
-          duration = Math.floor(Math.random() * 14400) + 3600; // 1-5 hours
-          latency = target.baseLatency + (Math.random() - 0.5) * 15; // Normal variation
-        }
+              return {
+                timestamp: new Date(agg.bucket),
+                status,
+                duration: 60, // 1 minute buckets
+                latency: agg.avg_rtt_ms || 0,
+              };
+            });
 
-        segments.push({
-          timestamp: new Date(currentTime),
-          status,
-          duration,
-          latency,
+            return {
+              targetId: target.id,
+              targetName: target.name,
+              segments,
+            };
+          } catch (error) {
+            console.error(`Failed to load history for ${target.name}:`, error);
+            return {
+              targetId: target.id,
+              targetName: target.name,
+              segments: [],
+            };
+          }
         });
 
-        currentTime = new Date(currentTime.getTime() + duration * 1000);
+        const results = await Promise.all(dataPromises);
+        setHistoryData(results);
+      } catch (error) {
+        console.error('Failed to load historical data:', error);
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      data.set(target.id, segments);
-    });
-
-    setHistoryData(data);
-  }, [timeRange]);
+    loadHistoricalData();
+  }, [targetList, timeRange]);
 
   // Calculate overall statistics
   const calculateStats = () => {
@@ -82,8 +84,8 @@ export default function History() {
     let totalIncidents = 0;
     let latencies: number[] = [];
 
-    historyData.forEach((segments) => {
-      segments.forEach((segment) => {
+    historyData.forEach((data) => {
+      data.segments.forEach((segment) => {
         if (segment.status === 'up') {
           totalUptime += segment.duration;
           if (segment.latency) latencies.push(segment.latency);
@@ -177,17 +179,30 @@ export default function History() {
 
       {/* Uptime Bars for Each Target */}
       <div className="uptime-bars-container">
-        {TARGETS.map((target) => {
-          const segments = historyData.get(target.id) || [];
-          return (
+        {isLoading ? (
+          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            Loading historical data...
+          </div>
+        ) : targetList.length === 0 ? (
+          <div style={{ padding: '3rem', textAlign: 'center' }}>
+            <p style={{ fontSize: '1.2rem', color: 'var(--text-secondary)' }}>
+              No targets configured yet. Go to <strong>Settings</strong> to add monitoring targets.
+            </p>
+          </div>
+        ) : historyData.length === 0 ? (
+          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            No historical data available for the selected time range.
+          </div>
+        ) : (
+          historyData.map((data) => (
             <UptimeBar
-              key={target.id}
-              segments={segments}
+              key={data.targetId}
+              segments={data.segments}
               days={timeRange}
-              targetName={target.name}
+              targetName={data.targetName}
             />
-          );
-        })}
+          ))
+        )}
       </div>
     </div>
   );

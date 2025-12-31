@@ -7,6 +7,7 @@ interface TargetMetrics {
   max: number;
   history: number[];
   online: boolean;
+  loss: number;
 }
 
 interface TargetCardProps {
@@ -125,16 +126,28 @@ export default function TargetCard({ name, url, metrics }: TargetCardProps) {
       {/* Metrics */}
       <div className="card-metrics">
         <div className="metric-item">
-          <span className="metric-label">Current</span>
-          <span className="metric-value current">{metrics.current}ms</span>
+          <span className="metric-label">Latência Atual</span>
+          <span className="metric-value current">{metrics.current.toFixed(2)}ms</span>
         </div>
         <div className="metric-item">
-          <span className="metric-label">Average</span>
-          <span className="metric-value average">{metrics.average}ms</span>
+          <span className="metric-label">Latência Média</span>
+          <span className="metric-value average">{metrics.average.toFixed(2)}ms</span>
         </div>
         <div className="metric-item">
-          <span className="metric-label">Max</span>
-          <span className="metric-value max">{metrics.max}ms</span>
+          <span className="metric-label">Latência Máxima</span>
+          <span className="metric-value max">{metrics.max.toFixed(2)}ms</span>
+        </div>
+        <div className="metric-item">
+          <span className="metric-label">Perda de Pacotes</span>
+          <span className="metric-value loss" style={{ color: metrics.loss > 0 ? '#e74c3c' : '#2ecc71' }}>
+            {metrics.loss.toFixed(2)}%
+          </span>
+        </div>
+        <div className="metric-item">
+          <span className="metric-label">Disponibilidade</span>
+          <span className="metric-value availability" style={{ color: metrics.online ? '#2ecc71' : '#e74c3c' }}>
+            {metrics.online ? '100%' : '0%'}
+          </span>
         </div>
       </div>
 

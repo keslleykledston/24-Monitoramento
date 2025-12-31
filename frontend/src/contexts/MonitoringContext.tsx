@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { targets, probes, incidents } from '../services/api';
 import { wsService } from '../services/websocket';
 import type { Target, Probe, Incident, WSMessage } from '../types';
@@ -31,6 +31,8 @@ interface TargetMetrics {
 
 interface MonitoringContextType {
   targetList: Target[];
+  httpTargets: Target[];
+  pingTargets: Target[];
   probeList: Probe[];
   incidentList: Incident[];
   targetStatus: TargetStatus;
@@ -43,11 +45,29 @@ const MonitoringContext = createContext<MonitoringContextType | undefined>(undef
 
 export function MonitoringProvider({ children }: { children: ReactNode }) {
   const [targetList, setTargetList] = useState<Target[]>([]);
+  const [httpTargets, setHttpTargets] = useState<Target[]>([]);
+  const [pingTargets, setPingTargets] = useState<Target[]>([]);
   const [probeList, setProbeList] = useState<Probe[]>([]);
   const [incidentList, setIncidentList] = useState<Incident[]>([]);
   const [targetStatus, setTargetStatus] = useState<TargetStatus>({});
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [targetMetrics, setTargetMetrics] = useState<TargetMetrics>({});
+
+  // Use ref to avoid recreating handleWSMessage when targetList changes
+  const targetListRef = useRef<Target[]>([]);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    targetListRef.current = targetList;
+  }, [targetList]);
+
+  // Separate targets by type whenever targetList changes
+  useEffect(() => {
+    const http = targetList.filter(t => t.type === 'http' || t.type === 'https');
+    const ping = targetList.filter(t => t.type === 'ping');
+    setHttpTargets(http);
+    setPingTargets(ping);
+  }, [targetList]);
 
   const loadData = useCallback(async () => {
     try {
@@ -59,6 +79,60 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
       setTargetList(t);
       setProbeList(p);
       setIncidentList(i);
+
+      // Load initial historical data for each target
+      if (t.length > 0) {
+        const metricsPromises = t.map(async (target) => {
+          try {
+            // Get last 15 minutes of live data
+            const response = await targets.getLive(target.id, 15);
+
+            // API returns { target: {...}, measurements: [...] }
+            const measurements = response?.measurements || [];
+
+            if (measurements.length > 0) {
+              const values = measurements
+                .map((m: any) => m.rtt_ms)
+                .filter((v: number) => v !== null && v !== undefined);
+
+              const historyWithTime = measurements.map((m: any) => ({
+                time: m.timestamp,
+                value: m.rtt_ms
+              }));
+
+              return {
+                targetName: target.name,
+                metrics: {
+                  history: values.slice(-60),
+                  historyWithTime: historyWithTime,
+                  min: values.length > 0 ? Math.min(...values) : Infinity,
+                  max: values.length > 0 ? Math.max(...values) : 0,
+                  avg: values.length > 0 ? values.reduce((a: number, b: number) => a + b, 0) / values.length : 0,
+                  current: values[values.length - 1] || 0,
+                  loss: 0
+                }
+              };
+            }
+          } catch (error) {
+            console.error(`Failed to load metrics for ${target.name}:`, error);
+          }
+          return null;
+        });
+
+        const metricsResults = await Promise.all(metricsPromises);
+        const initialMetrics: TargetMetrics = {};
+
+        metricsResults.forEach((result) => {
+          if (result) {
+            initialMetrics[result.targetName] = result.metrics;
+          }
+        });
+
+        if (Object.keys(initialMetrics).length > 0) {
+          setTargetMetrics(initialMetrics);
+          console.log('Loaded initial metrics for targets:', Object.keys(initialMetrics));
+        }
+      }
     } catch (error) {
       console.error('Failed to load data:', error);
     }
@@ -77,7 +151,8 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
 
     // Update chart data (keep last 100 points)
     if (message.rtt_ms !== null) {
-      const target = targetList.find(t => t.id === message.target_id);
+      // Use ref to get current target list without dependency
+      const target = targetListRef.current.find(t => t.id === message.target_id);
       if (target) {
         setChartData((prev) => {
           const newData = [...prev, {
@@ -128,7 +203,7 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
         });
       }
     }
-  }, [targetList]);
+  }, []); // No dependencies - uses ref instead
 
   useEffect(() => {
     // Initial data load
@@ -149,6 +224,8 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
     <MonitoringContext.Provider
       value={{
         targetList,
+        httpTargets,
+        pingTargets,
         probeList,
         incidentList,
         targetStatus,

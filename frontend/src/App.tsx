@@ -29,7 +29,14 @@ function Layout({ children }: { children: React.ReactNode }) {
     <>
       <div className="header">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1>Multi-Location Monitoring</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
+            <img
+              src="/k3g_logo_transparent.png"
+              alt="K3G Solutions"
+              style={{ height: 40, width: 'auto' }}
+            />
+            <h1>K3G Monitoring</h1>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
             <span>Welcome, {username}</span>
             <button
@@ -47,9 +54,9 @@ function Layout({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="nav">
           <Link to="/dashboard">Dashboard</Link>
-          <Link to="/latency">Latency Monitor</Link>
-          <Link to="/history">History</Link>
-          <Link to="/incidents">Incidents</Link>
+          <Link to="/latency">Latência</Link>
+          <Link to="/history">Histórico</Link>
+          <Link to="/incidents">Incidentes</Link>
           <Link to="/settings">Settings</Link>
         </nav>
       </div>

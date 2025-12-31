@@ -147,11 +147,12 @@ export default function LatencyChart({ data, targetName }: LatencyChartProps) {
         },
         formatter: (params: any) => {
           const param = params[0];
+          const latencyValue = typeof param.value === 'number' ? param.value.toFixed(2) : param.value;
           return `
             <div style="padding: 4px;">
               <strong>${targetName}</strong><br/>
               <span style="color: #888888;">Time:</span> ${param.axisValue}<br/>
-              <span style="color: #00D4FF;">Latency:</span> <strong>${param.value}ms</strong>
+              <span style="color: #00D4FF;">Latency:</span> <strong>${latencyValue}ms</strong>
             </div>
           `;
         },

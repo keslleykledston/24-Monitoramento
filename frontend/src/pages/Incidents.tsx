@@ -4,12 +4,23 @@ import { incidents as incidentsAPI } from '../services/api';
 import type { Incident } from '../types';
 
 export default function Incidents() {
-  const { incidentList } = useMonitoring();
+  const { incidentList, targetList, probeList } = useMonitoring();
   const [filteredIncidents, setFilteredIncidents] = useState<Incident[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('open');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+
+  // Helper functions to get names
+  const getTargetName = (targetId: number): string => {
+    const target = targetList.find(t => t.id === targetId);
+    return target ? target.name : `Target #${targetId}`;
+  };
+
+  const getProbeName = (probeId: number): string => {
+    const probe = probeList.find(p => p.id === probeId);
+    return probe ? probe.name : `Probe #${probeId}`;
+  };
 
   useEffect(() => {
     let filtered = [...incidentList];
@@ -137,7 +148,7 @@ export default function Incidents() {
             >
               <div className="incident-header">
                 <div className="incident-title">
-                  <h3>Target #{incident.target_id} - Probe #{incident.probe_id}</h3>
+                  <h3>{getTargetName(incident.target_id)} - {getProbeName(incident.probe_id)}</h3>
                   <div className="badges">
                     <span className={`badge ${getStatusBadge(incident.status)}`}>
                       {incident.status.toUpperCase()}
@@ -148,7 +159,7 @@ export default function Incidents() {
                   </div>
                 </div>
                 <div className="incident-time">
-                  {new Date(incident.last_occurrence).toLocaleString()}
+                  {new Date(incident.last_occurrence).toLocaleString('pt-BR')}
                 </div>
               </div>
 
@@ -199,10 +210,10 @@ export default function Incidents() {
             <h3>Incident Details</h3>
             <div className="modal-body">
               <p>
-                <strong>Target ID:</strong> {selectedIncident.target_id}
+                <strong>Target:</strong> {getTargetName(selectedIncident.target_id)}
               </p>
               <p>
-                <strong>Probe ID:</strong> {selectedIncident.probe_id}
+                <strong>Probe:</strong> {getProbeName(selectedIncident.probe_id)}
               </p>
               <p>
                 <strong>Status:</strong> {selectedIncident.status}
@@ -215,11 +226,11 @@ export default function Incidents() {
               </p>
               <p>
                 <strong>First Occurrence:</strong>{' '}
-                {new Date(selectedIncident.first_occurrence).toLocaleString()}
+                {new Date(selectedIncident.first_occurrence).toLocaleString('pt-BR')}
               </p>
               <p>
                 <strong>Last Occurrence:</strong>{' '}
-                {new Date(selectedIncident.last_occurrence).toLocaleString()}
+                {new Date(selectedIncident.last_occurrence).toLocaleString('pt-BR')}
               </p>
             </div>
           </div>

@@ -182,12 +182,21 @@ def main():
                 target_type = target.get("type", "https")
 
                 if target_type in ["http", "https"]:
-                    result = http_check(url)
-                else:  # ping
-                    result = ping_check(ip_address or url or target.get("name", ""))
+                    # For HTTP/HTTPS targets, do BOTH checks
+                    # 1. HTTP check for application monitoring
+                    http_result = http_check(url)
+                    send_measurement(target_id, http_result)
+                    logger.debug(f"HTTP checked {url}: UP={http_result['up']}, RTT={http_result['rtt_ms']}ms")
 
-                send_measurement(target_id, result)
-                logger.debug(f"Checked {url}: UP={result['up']}, RTT={result['rtt_ms']}ms")
+                    # 2. ICMP ping check for network latency monitoring
+                    ping_result = ping_check(ip_address or url or target.get("name", ""))
+                    send_measurement(target_id, ping_result)
+                    logger.debug(f"PING checked {url}: UP={ping_result['up']}, RTT={ping_result['rtt_ms']}ms")
+                else:  # ping only
+                    # For PING targets, only do ICMP ping
+                    result = ping_check(ip_address or url or target.get("name", ""))
+                    send_measurement(target_id, result)
+                    logger.debug(f"PING checked {url}: UP={result['up']}, RTT={result['rtt_ms']}ms")
 
             # Sleep until next interval
             time.sleep(CHECK_INTERVAL)

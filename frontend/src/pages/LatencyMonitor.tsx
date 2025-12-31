@@ -1,168 +1,69 @@
 import { useState, useEffect } from 'react';
+import { useMonitoring } from '../contexts/MonitoringContext';
 import LatencyChart from '../components/latency/LatencyChart';
 import TargetCard from '../components/latency/TargetCard';
 import '../styles/latency-monitor.css';
-
-// Target definitions
-const TARGETS = [
-  { id: 1, name: 'Globo', url: 'https://globo.com' },
-  { id: 2, name: 'UOL', url: 'https://uol.com.br' },
-  { id: 3, name: 'Mercado Livre', url: 'https://mercadolivre.com.br' },
-  { id: 4, name: 'Gov.br', url: 'https://gov.br' },
-  { id: 5, name: 'Reclame Aqui', url: 'https://reclameaqui.com.br' },
-  { id: 6, name: 'Google', url: 'https://google.com' },
-  { id: 7, name: 'YouTube', url: 'https://youtube.com' },
-  { id: 8, name: 'Facebook', url: 'https://facebook.com' },
-  { id: 9, name: 'Instagram', url: 'https://instagram.com' },
-  { id: 10, name: 'Wikipedia', url: 'https://wikipedia.org' },
-];
 
 interface LatencyDataPoint {
   timestamp: string;
   value: number;
 }
 
-interface TargetMetrics {
+interface LocalTargetMetrics {
   current: number;
   average: number;
   max: number;
   history: number[];
   online: boolean;
+  loss: number;
 }
 
-// Generate mock latency value with occasional spikes (PING - 30-100ms normal)
-const generateLatency = (baseLatency: number, spikeChance: number = 0.05): number => {
-  const isSpike = Math.random() < spikeChance;
-  if (isSpike) {
-    // Spike between 150-250ms (50-150% above normal)
-    return Math.floor(Math.random() * 100) + 150;
-  }
-  // Normal latency with small variation (30-100ms range)
-  const variation = (Math.random() - 0.5) * 15;
-  return Math.max(30, Math.min(100, Math.floor(baseLatency + variation)));
-};
-
-// Format timestamp
-const formatTimestamp = (date: Date): string => {
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  const seconds = date.getSeconds().toString().padStart(2, '0');
-  return `${date.toLocaleDateString()} ${hours}:${minutes}:${seconds}`;
-};
-
 export default function LatencyMonitor() {
-  const [selectedTargetId, setSelectedTargetId] = useState<number>(1);
-  const [targetData, setTargetData] = useState<Map<number, LatencyDataPoint[]>>(new Map());
-  const [targetMetrics, setTargetMetrics] = useState<Map<number, TargetMetrics>>(new Map());
+  const { targetList, targetMetrics, targetStatus, probeList } = useMonitoring();
+  const [selectedTargetId, setSelectedTargetId] = useState<number | null>(null);
 
-  // Initialize data
+  // Auto-select first target when list loads
   useEffect(() => {
-    const initialData = new Map<number, LatencyDataPoint[]>();
-    const initialMetrics = new Map<number, TargetMetrics>();
+    if (targetList.length > 0 && selectedTargetId === null) {
+      setSelectedTargetId(targetList[0].id);
+    }
+  }, [targetList, selectedTargetId]);
 
-    TARGETS.forEach((target) => {
-      const history: number[] = [];
-      const dataPoints: LatencyDataPoint[] = [];
-      const now = new Date();
+  // Get selected target data
+  const selectedTarget = targetList.find((t) => t.id === selectedTargetId);
+  const selectedMetrics = selectedTarget ? targetMetrics[selectedTarget.name] : null;
 
-      // Generate 20 minutes of historical data (1200 points)
-      for (let i = 1200; i >= 0; i--) {
-        const timestamp = new Date(now.getTime() - i * 1000);
-        const baseLatency = 40 + (target.id * 3); // Different base for each target (40-70ms)
-        const value = generateLatency(baseLatency, 0.03);
+  // Convert to LatencyDataPoint format for chart
+  const selectedData: LatencyDataPoint[] = selectedMetrics?.historyWithTime?.map((item) => ({
+    timestamp: new Date(item.time).toLocaleString('pt-BR'),
+    value: item.value,
+  })) || [];
 
-        dataPoints.push({
-          timestamp: formatTimestamp(timestamp),
-          value,
-        });
-        history.push(value);
-      }
-
-      initialData.set(target.id, dataPoints);
-
-      // Calculate initial metrics
-      const current = history[history.length - 1];
-      const average = Math.floor(history.reduce((a, b) => a + b, 0) / history.length);
-      const max = Math.max(...history);
-
-      initialMetrics.set(target.id, {
-        current,
-        average,
-        max,
-        history,
-        online: true,
-      });
-    });
-
-    setTargetData(initialData);
-    setTargetMetrics(initialMetrics);
-  }, []);
-
-  // Real-time updates (every second)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date();
-
-      setTargetData((prevData) => {
-        const newData = new Map(prevData);
-
-        TARGETS.forEach((target) => {
-          const targetHistory = newData.get(target.id) || [];
-          const baseLatency = 40 + (target.id * 3); // 40-70ms base
-          const newValue = generateLatency(baseLatency, 0.03);
-
-          const newPoint: LatencyDataPoint = {
-            timestamp: formatTimestamp(now),
-            value: newValue,
-          };
-
-          // Keep last 1200 points (20 minutes)
-          const updatedHistory = [...targetHistory.slice(-1199), newPoint];
-          newData.set(target.id, updatedHistory);
-        });
-
-        return newData;
-      });
-
-      setTargetMetrics((prevMetrics) => {
-        const newMetrics = new Map(prevMetrics);
-
-        TARGETS.forEach((target) => {
-          const targetHistory = targetData.get(target.id) || [];
-          const values = targetHistory.map((d) => d.value);
-
-          if (values.length > 0) {
-            const current = values[values.length - 1];
-            const average = Math.floor(values.reduce((a, b) => a + b, 0) / values.length);
-            const max = Math.max(...values);
-
-            newMetrics.set(target.id, {
-              current,
-              average,
-              max,
-              history: values,
-              online: Math.random() > 0.02, // 98% uptime
-            });
-          }
-        });
-
-        return newMetrics;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [targetData]);
-
-  const selectedTarget = TARGETS.find((t) => t.id === selectedTargetId);
-  const selectedData = targetData.get(selectedTargetId) || [];
+  if (targetList.length === 0) {
+    return (
+      <div className="latency-monitor">
+        <div className="latency-monitor-header">
+          <h1 className="latency-monitor-title">Monitor de Latência ICMP (Ping)</h1>
+          <p className="latency-monitor-subtitle">
+            Monitoramento em tempo real - Atualiza a cada segundo - ICMP Ping
+          </p>
+        </div>
+        <div className="empty-state" style={{ padding: '3rem', textAlign: 'center' }}>
+          <p style={{ fontSize: '1.2rem', color: 'var(--text-secondary)' }}>
+            Nenhum alvo configurado. Vá em <strong>Settings</strong> para adicionar alvos de monitoramento.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="latency-monitor">
       {/* Header */}
       <div className="latency-monitor-header">
-        <h1 className="latency-monitor-title">Real-Time Latency Monitor</h1>
+        <h1 className="latency-monitor-title">Monitor de Latência ICMP (Ping)</h1>
         <p className="latency-monitor-subtitle">
-          Live - Updates every second - 20 minutes history
+          Monitoramento em tempo real - Atualiza a cada segundo - ICMP Ping
         </p>
       </div>
 
@@ -173,39 +74,55 @@ export default function LatencyMonitor() {
           <div className="target-selector">
             <span className="target-selector-label">Target:</span>
             <select
-              value={selectedTargetId}
+              value={selectedTargetId || ''}
               onChange={(e) => setSelectedTargetId(Number(e.target.value))}
             >
-              {TARGETS.map((target) => (
+              {targetList.map((target) => (
                 <option key={target.id} value={target.id}>
-                  {target.name}
+                  {target.name} {target.type === 'ping' ? '(PING)' : '(HTTP+PING)'}
                 </option>
               ))}
             </select>
           </div>
         </div>
         <div className="main-chart-container">
-          <LatencyChart
-            data={selectedData}
-            targetName={selectedTarget?.name || ''}
-          />
+          {selectedData.length > 0 ? (
+            <LatencyChart
+              data={selectedData}
+              targetName={selectedTarget?.name || ''}
+            />
+          ) : (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              Waiting for data... The chart will appear as measurements arrive.
+            </div>
+          )}
         </div>
       </div>
 
       {/* Targets Overview */}
       <div className="targets-overview-section">
-        <h2 className="section-title">Targets Overview</h2>
+        <h2 className="section-title">Visão Geral dos Alvos - Monitoramento ICMP</h2>
         <div className="latency-targets-grid">
-          {TARGETS.map((target) => {
-            const metrics = targetMetrics.get(target.id);
-            if (!metrics) return null;
+          {targetList.map((target) => {
+            const metrics = targetMetrics[target.name];
+            const status = targetStatus[`${target.id}-${probeList[0]?.id}`];
+
+            // Convert metrics to LocalTargetMetrics format
+            const localMetrics: LocalTargetMetrics = {
+              current: metrics?.current || 0,
+              average: metrics?.avg || 0,
+              max: metrics?.max || 0,
+              history: metrics?.history || [],
+              online: status?.up || false,
+              loss: metrics?.loss || 0,
+            };
 
             return (
               <TargetCard
                 key={target.id}
-                name={target.name}
+                name={`${target.name} ${target.type === 'ping' ? '(PING)' : '(HTTP+PING)'}`}
                 url={target.url}
-                metrics={metrics}
+                metrics={localMetrics}
               />
             );
           })}
