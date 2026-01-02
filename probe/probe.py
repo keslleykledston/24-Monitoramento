@@ -121,7 +121,7 @@ def http_check(url: str) -> Dict[str, Any]:
         }
 
 
-def send_measurement(target_id: int, result: Dict[str, Any]):
+def send_measurement(target_id: int, result: Dict[str, Any], measurement_type: str = "icmp"):
     """Send measurement to API"""
     try:
         payload = {
@@ -130,6 +130,7 @@ def send_measurement(target_id: int, result: Dict[str, Any]):
             "target_id": target_id,
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "up": result["up"],
+            "measurement_type": measurement_type,
             "rtt_ms": result["rtt_ms"],
             "http_status_code": result.get("status_code"),
             "packet_loss": result.get("loss", 0.0)
@@ -185,17 +186,17 @@ def main():
                     # For HTTP/HTTPS targets, do BOTH checks
                     # 1. HTTP check for application monitoring
                     http_result = http_check(url)
-                    send_measurement(target_id, http_result)
+                    send_measurement(target_id, http_result, "http")
                     logger.debug(f"HTTP checked {url}: UP={http_result['up']}, RTT={http_result['rtt_ms']}ms")
 
                     # 2. ICMP ping check for network latency monitoring
                     ping_result = ping_check(ip_address or url or target.get("name", ""))
-                    send_measurement(target_id, ping_result)
+                    send_measurement(target_id, ping_result, "icmp")
                     logger.debug(f"PING checked {url}: UP={ping_result['up']}, RTT={ping_result['rtt_ms']}ms")
                 else:  # ping only
                     # For PING targets, only do ICMP ping
                     result = ping_check(ip_address or url or target.get("name", ""))
-                    send_measurement(target_id, result)
+                    send_measurement(target_id, result, "icmp")
                     logger.debug(f"PING checked {url}: UP={result['up']}, RTT={result['rtt_ms']}ms")
 
             # Sleep until next interval

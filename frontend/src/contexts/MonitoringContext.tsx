@@ -38,6 +38,8 @@ interface MonitoringContextType {
   targetStatus: TargetStatus;
   chartData: ChartDataPoint[];
   targetMetrics: TargetMetrics;
+  httpMetrics: TargetMetrics;
+  icmpMetrics: TargetMetrics;
   loadData: () => void;
 }
 
@@ -52,6 +54,8 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
   const [targetStatus, setTargetStatus] = useState<TargetStatus>({});
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [targetMetrics, setTargetMetrics] = useState<TargetMetrics>({});
+  const [httpMetrics, setHttpMetrics] = useState<TargetMetrics>({});
+  const [icmpMetrics, setIcmpMetrics] = useState<TargetMetrics>({});
 
   // Use ref to avoid recreating handleWSMessage when targetList changes
   const targetListRef = useRef<Target[]>([]);
@@ -164,43 +168,56 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
           return newData.slice(-100);
         });
 
-        // Update target metrics
-        setTargetMetrics((prev) => {
-          const existing = prev[target.name] || {
-            history: [],
-            historyWithTime: [],
-            min: Infinity,
-            max: 0,
-            avg: 0,
-            current: 0,
-            loss: 0
-          };
+        // Helper function to update metrics
+        const updateMetrics = (setMetricsFn: React.Dispatch<React.SetStateAction<TargetMetrics>>) => {
+          setMetricsFn((prev) => {
+            const existing = prev[target.name] || {
+              history: [],
+              historyWithTime: [],
+              min: Infinity,
+              max: 0,
+              avg: 0,
+              current: 0,
+              loss: 0
+            };
 
-          const newHistory = [...existing.history, message.rtt_ms!].slice(-60); // Last 60 points for mini chart
+            const newHistory = [...existing.history, message.rtt_ms!].slice(-60);
+            const newHistoryWithTime = [
+              ...existing.historyWithTime,
+              { time: message.timestamp, value: message.rtt_ms! }
+            ].slice(-3600);
 
-          // Keep 1 hour of data (3600 points at 1s interval)
-          const newHistoryWithTime = [
-            ...existing.historyWithTime,
-            { time: message.timestamp, value: message.rtt_ms! }
-          ].slice(-3600);
+            const min = Math.min(existing.min, message.rtt_ms!);
+            const max = Math.max(existing.max, message.rtt_ms!);
+            const avg = newHistory.reduce((a, b) => a + b, 0) / newHistory.length;
 
-          const min = Math.min(existing.min, message.rtt_ms!);
-          const max = Math.max(existing.max, message.rtt_ms!);
-          const avg = newHistory.reduce((a, b) => a + b, 0) / newHistory.length;
+            return {
+              ...prev,
+              [target.name]: {
+                history: newHistory,
+                historyWithTime: newHistoryWithTime,
+                min,
+                max,
+                avg,
+                current: message.rtt_ms!,
+                loss: message.up ? 0 : 100
+              }
+            };
+          });
+        };
 
-          return {
-            ...prev,
-            [target.name]: {
-              history: newHistory,
-              historyWithTime: newHistoryWithTime,
-              min,
-              max,
-              avg,
-              current: message.rtt_ms!,
-              loss: message.up ? 0 : 100
-            }
-          };
-        });
+        // Update all target metrics (legacy - for compatibility)
+        updateMetrics(setTargetMetrics);
+
+        // Update type-specific metrics based on measurement_type
+        if (message.measurement_type === 'http') {
+          updateMetrics(setHttpMetrics);
+        } else if (message.measurement_type === 'icmp') {
+          updateMetrics(setIcmpMetrics);
+        } else {
+          // Fallback: if no measurement_type, assume ICMP (for backwards compatibility)
+          updateMetrics(setIcmpMetrics);
+        }
       }
     }
   }, []); // No dependencies - uses ref instead
@@ -231,6 +248,8 @@ export function MonitoringProvider({ children }: { children: ReactNode }) {
         targetStatus,
         chartData,
         targetMetrics,
+        httpMetrics,
+        icmpMetrics,
         loadData
       }}
     >

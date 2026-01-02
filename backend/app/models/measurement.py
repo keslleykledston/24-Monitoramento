@@ -1,6 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Index, Enum as SQLEnum
 from datetime import datetime
+import enum
 from ..core.database import Base
+
+
+class MeasurementType(str, enum.Enum):
+    HTTP = "http"
+    ICMP = "icmp"
 
 
 class MeasurementRaw(Base):
@@ -11,6 +17,7 @@ class MeasurementRaw(Base):
     timestamp = Column(DateTime, nullable=False, index=True)
     probe_id = Column(Integer, ForeignKey("probes.id"), nullable=False)
     target_id = Column(Integer, ForeignKey("targets.id"), nullable=False)
+    measurement_type = Column(SQLEnum(MeasurementType), default=MeasurementType.ICMP, nullable=False)
 
     # Status
     up = Column(Boolean, nullable=False)

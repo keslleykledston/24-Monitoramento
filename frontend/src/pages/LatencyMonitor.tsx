@@ -19,7 +19,7 @@ interface LocalTargetMetrics {
 }
 
 export default function LatencyMonitor() {
-  const { targetList, targetMetrics, targetStatus, probeList } = useMonitoring();
+  const { targetList, icmpMetrics, targetStatus, probeList } = useMonitoring();
   const [selectedTargetId, setSelectedTargetId] = useState<number | null>(null);
 
   // Auto-select first target when list loads
@@ -31,7 +31,7 @@ export default function LatencyMonitor() {
 
   // Get selected target data
   const selectedTarget = targetList.find((t) => t.id === selectedTargetId);
-  const selectedMetrics = selectedTarget ? targetMetrics[selectedTarget.name] : null;
+  const selectedMetrics = selectedTarget ? icmpMetrics[selectedTarget.name] : null;
 
   // Convert to LatencyDataPoint format for chart
   const selectedData: LatencyDataPoint[] = selectedMetrics?.historyWithTime?.map((item) => ({
@@ -104,7 +104,7 @@ export default function LatencyMonitor() {
         <h2 className="section-title">Visão Geral dos Alvos - Monitoramento ICMP</h2>
         <div className="latency-targets-grid">
           {targetList.map((target) => {
-            const metrics = targetMetrics[target.name];
+            const metrics = icmpMetrics[target.name];
             const status = targetStatus[`${target.id}-${probeList[0]?.id}`];
 
             // Convert metrics to LocalTargetMetrics format

@@ -1,12 +1,14 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+from ..models.measurement import MeasurementType
 
 
 class MeasurementCreate(BaseModel):
     probe_id: int
     target_id: int
     up: bool
+    measurement_type: MeasurementType = MeasurementType.ICMP
     rtt_ms: Optional[float] = None
     jitter_ms: Optional[float] = None
     loss_pct: Optional[float] = None
@@ -20,6 +22,7 @@ class MeasurementRawResponse(BaseModel):
     probe_id: int
     target_id: int
     up: bool
+    measurement_type: MeasurementType
     rtt_ms: Optional[float]
     jitter_ms: Optional[float]
     loss_pct: Optional[float]

@@ -78,6 +78,7 @@ export interface WSMessage {
   target_id: number;
   probe_id: number;
   up: boolean;
+  measurement_type?: 'http' | 'icmp';
   rtt_ms: number | null;
   timestamp: string;
   error_message?: string;
@@ -95,11 +96,6 @@ export interface WSAcknowledge {
 export interface LoginResponse {
   access_token: string;
   token_type: string;
-  user: {
-    id: number;
-    username: string;
-    email: string;
-  };
 }
 
 export interface APIError {

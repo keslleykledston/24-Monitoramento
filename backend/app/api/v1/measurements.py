@@ -39,6 +39,7 @@ def create_measurement(
         "probe_id": measurement.probe_id,
         "location_id": probe.location_id if probe else None,
         "up": measurement.up,
+        "measurement_type": measurement.measurement_type.value if hasattr(measurement.measurement_type, 'value') else measurement.measurement_type,
         "rtt_ms": measurement.rtt_ms,
         "jitter_ms": measurement.jitter_ms,
         "loss_pct": measurement.loss_pct,

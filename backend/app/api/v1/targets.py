@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta
 from ...core.database import get_db
 from ...core.auth import get_current_user
-from ...models import Target, User, MeasurementRaw, Measurement1m
+from ...models import Target, User, MeasurementRaw, Measurement1m, MeasurementType
 from ...schemas.target import TargetCreate, TargetResponse
 from ...schemas.measurement import MeasurementRawResponse, Measurement1mResponse
 
@@ -42,6 +42,7 @@ def create_target(
 def get_target_live_data(
     target_id: int,
     window: int = 15,  # minutes
+    measurement_type: Optional[str] = Query(None, description="Filter by measurement type: http or icmp"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -52,12 +53,18 @@ def get_target_live_data(
 
     cutoff = datetime.utcnow() - timedelta(minutes=window)
 
-    measurements = db.query(MeasurementRaw).filter(
+    # Build query with optional measurement_type filter
+    query = db.query(MeasurementRaw).filter(
         and_(
             MeasurementRaw.target_id == target_id,
             MeasurementRaw.timestamp >= cutoff
         )
-    ).order_by(desc(MeasurementRaw.timestamp)).limit(1000).all()
+    )
+
+    if measurement_type:
+        query = query.filter(MeasurementRaw.measurement_type == measurement_type)
+
+    measurements = query.order_by(desc(MeasurementRaw.timestamp)).limit(1000).all()
 
     return {
         "target": TargetResponse.from_orm(target),

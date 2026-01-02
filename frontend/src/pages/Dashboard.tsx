@@ -3,7 +3,7 @@ import { useMonitoring } from '../contexts/MonitoringContext';
 import { buildSmoothPath, smoothValues, downsampleValues } from '../utils/chart';
 
 export default function Dashboard() {
-  const { httpTargets, targetMetrics, targetStatus, probeList } = useMonitoring();
+  const { httpTargets, httpMetrics, targetStatus, probeList } = useMonitoring();
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export default function Dashboard() {
       ) : (
         <div className="targets-grid">
           {httpTargets.map((target) => {
-            const metrics = targetMetrics[target.name];
+            const metrics = httpMetrics[target.name];
             const status = targetStatus[`${target.id}-${probeList[0]?.id}`];
             const isUp = status?.up || false;
             const currentRtt = status?.rtt_ms || 0;

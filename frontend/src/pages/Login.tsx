@@ -20,7 +20,7 @@ export default function Login() {
 
       // Store token and username
       localStorage.setItem('token', response.access_token);
-      localStorage.setItem('username', response.user.username);
+      localStorage.setItem('username', username);
 
       // Redirect to dashboard
       navigate('/dashboard');
